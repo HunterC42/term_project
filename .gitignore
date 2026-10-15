@@ -1,0 +1,41 @@
+# Ignore node_modules folder
+node_modules/
+
+# Ignore log files
+*.log
+
+# Ignore environment variable files
+.env
+.env.local
+.env.*.local
+.venv
+
+# Ignore build output directories
+dist/
+build/
+
+# Ignore system files
+.DS_Store
+Thumbs.db
+
+# Ignore IDE specific files
+.idea/
+.vscode/
+*.iml
+
+# Ignore temporary files
+*.tmp
+*.swp
+*.swo
+
+# Ignore coverage reports
+coverage/
+
+# Ignore personal files
+*.key
+*.pem
+*.p12
+
+# Ignore future possible sensitive files
+secrets.json
+config.json
