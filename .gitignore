@@ -39,3 +39,6 @@ coverage/
 # Ignore future possible sensitive files
 secrets.json
 config.json
+
+# Ignore data files
+*.parquet
