@@ -65,7 +65,6 @@ def validate_data(df):
 
 
 def load_crime_types(conn, df):
-    # Get unique crime classification codes
     crime_types = df[
         ["iucr", "primary_type", "description", "fbi_code"]
     ].drop_duplicates(subset=["iucr"])
