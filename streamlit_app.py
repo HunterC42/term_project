@@ -143,23 +143,6 @@ def get_area_region(area_num) -> str:
     return meta[1] if meta else "Unknown"
 
 
-def compute_cramers_v(contingency: pd.DataFrame) -> float:
-    """Compute Cramér's V association statistic for a region x crime_type table."""
-    observed = contingency.to_numpy(dtype=float)
-    n = observed.sum()
-    if n <= 0 or observed.shape[0] < 2 or observed.shape[1] < 2:
-        return 0.0
-    row_sums = observed.sum(axis=1, keepdims=True)
-    col_sums = observed.sum(axis=0, keepdims=True)
-    expected = (row_sums @ col_sums) / n
-    with np.errstate(divide="ignore", invalid="ignore"):
-        chi2 = np.nansum((observed - expected) ** 2 / expected)
-    min_dim = min(observed.shape[0] - 1, observed.shape[1] - 1)
-    if min_dim <= 0:
-        return 0.0
-    return float(np.sqrt(chi2 / (n * min_dim)))
-
-
 def get_database_url() -> str:
     """Build PostgreSQL connection URL from .env / environment variables."""
     load_dotenv()
@@ -327,7 +310,7 @@ def query_kpis(where_sql: str, params: dict) -> dict:
 
 @st.cache_data(ttl=60)
 def query_top_areas(where_sql: str, params: dict) -> pd.DataFrame:
-    """Q1: Which areas of Chicago have the most reported crimes?"""
+    """Which areas of Chicago have the most reported crimes?"""
     engine = get_engine()
     sql = text(
         f"""
@@ -381,7 +364,7 @@ def query_common_crimes(where_sql: str, params: dict) -> pd.DataFrame:
 
 @st.cache_data(ttl=60)
 def query_crime_region_matrix(where_sql: str, params: dict) -> pd.DataFrame:
-    """Q2: Is there a correlation between types of crime and regions in the city?"""
+    """Is there a correlation between types of crime and regions in the city?"""
     engine = get_engine()
     sql = text(
         f"""
@@ -414,7 +397,7 @@ def query_crime_region_matrix(where_sql: str, params: dict) -> pd.DataFrame:
 
 @st.cache_data(ttl=60)
 def query_area_crime_counts(where_sql: str, params: dict) -> pd.DataFrame:
-    """Q3: Crime counts per community area merged with official population and land area."""
+    """Crime counts per community area merged with official population."""
     engine = get_engine()
     sql = text(
         f"""
@@ -437,14 +420,13 @@ def query_area_crime_counts(where_sql: str, params: dict) -> pd.DataFrame:
 
     merged = COMMUNITY_AREA_DF.merge(counts_df, on="community_area", how="left")
     merged["crime_count"] = merged["crime_count"].fillna(0).astype(int)
-    merged["population_density"] = merged["population"] / merged["area_sq_mi"]
-    merged["crime_density"] = merged["crime_count"] / merged["area_sq_mi"]
+    merged["crimes_per_1k"] = (merged["crime_count"] / merged["population"]) * 1000.0
     return merged
 
 
 @st.cache_data(ttl=60)
 def query_trends_by_region(where_sql: str, params: dict) -> pd.DataFrame:
-    """Q4: How have crime patterns changed over time in different regions of Chicago?"""
+    """How have crime patterns changed over time in different regions of Chicago?"""
     engine = get_engine()
     sql = text(
         f"""
@@ -603,10 +585,9 @@ kpis = query_kpis(where_sql, params)
 total_crimes = int(kpis.get("total_crimes") or 0)
 total_arrests = int(kpis.get("total_arrests") or 0)
 arrest_rate = (total_arrests / total_crimes * 100) if total_crimes else 0.0
-active_areas = int(kpis.get("active_areas") or 0)
 latest_update = kpis.get("latest_update")
 
-col1, col2, col3, col4 = st.columns(4)
+col1, col2, col3 = st.columns(3)
 col1.metric("Filtered Crime Records", f"{total_crimes:,}")
 col2.metric(
     "Arrest Rate",
@@ -615,12 +596,11 @@ col2.metric(
     delta_color="off",
     delta_arrow="off",
 )
-col3.metric("Community Areas Represented", f"{active_areas} / 77")
-col4.metric("Latest DB Checkpoint", str(latest_update)[:19] if latest_update else "N/A")
+col3.metric("Latest DB Checkpoint", str(latest_update)[:19] if latest_update else "N/A")
 
 st.divider()
 
-# --- Row 1: Q1 (Top Community Areas) & Q5 (Most Common Crime Types) ---
+# --- Row 1: Top Community Areas & Most Common Crime Types ---
 left_col, right_col = st.columns(2)
 
 with left_col:
@@ -647,7 +627,7 @@ with left_col:
         st.plotly_chart(fig_areas, use_container_width=True)
 
 with right_col:
-    st.subheader("Q5. What Are the Most Common Types of Crime Reported?")
+    st.subheader("What Are the Most Common Types of Crime Reported?")
     common_df = query_common_crimes(where_sql, params)
     if common_df.empty:
         st.info("No crime types match the current filters.")
@@ -676,7 +656,7 @@ with right_col:
         fig_types.update_layout(height=440, margin=dict(l=10, r=10, t=10, b=10))
         st.plotly_chart(fig_types, use_container_width=True)
 
-# --- Row 2: Q2 (Crime Type vs Region Correlation) & Q3 (Crime Density vs Population Density) ---
+# --- Row 2: Crime Type vs Region Correlation & Total Crimes vs Population ---
 left_col2, right_col2 = st.columns(2)
 
 with left_col2:
@@ -685,13 +665,6 @@ with left_col2:
     if matrix_df.empty:
         st.info("Not enough regional data for the current filter selection.")
     else:
-        full_contingency = matrix_df.pivot_table(
-            index="primary_type",
-            columns="region",
-            values="crime_count",
-            aggfunc="sum",
-            fill_value=0,
-        )
         top_8_types = (
             matrix_df.groupby("primary_type")["crime_count"]
             .sum()
@@ -718,88 +691,90 @@ with left_col2:
         st.plotly_chart(fig_heatmap, use_container_width=True)
 
 with right_col2:
-    st.subheader("Is Crime Density Proportional to Population Density?")
-    density_granularity = st.radio(
+    st.subheader("Total Number of Crimes vs. Population")
+    pop_granularity = st.radio(
         "Aggregation Level",
         options=["By Region (9 Chicago Sides)", "By Community Area (77 Areas)"],
         horizontal=True,
         label_visibility="collapsed",
     )
-    area_density_df = query_area_crime_counts(where_sql, params)
+    area_pop_df = query_area_crime_counts(where_sql, params)
     if selected_regions:
-        area_density_df = area_density_df[area_density_df["region"].isin(selected_regions)]
+        area_pop_df = area_pop_df[area_pop_df["region"].isin(selected_regions)]
     if selected_areas:
-        area_density_df = area_density_df[area_density_df["community_area"].isin(selected_areas)]
+        area_pop_df = area_pop_df[area_pop_df["community_area"].isin(selected_areas)]
 
-    if density_granularity == "By Region (9 Chicago Sides)":
+    if pop_granularity == "By Region (9 Chicago Sides)":
         plot_df = (
-            area_density_df.groupby("region", as_index=False)
+            area_pop_df.groupby("region", as_index=False)
             .agg(
                 population=("population", "sum"),
-                area_sq_mi=("area_sq_mi", "sum"),
                 crime_count=("crime_count", "sum"),
             )
         )
-        plot_df["population_density"] = plot_df["population"] / plot_df["area_sq_mi"]
-        plot_df["crime_density"] = plot_df["crime_count"] / plot_df["area_sq_mi"]
+        plot_df["crimes_per_1k"] = (plot_df["crime_count"] / plot_df["population"]) * 1000.0
         hover_name_col = "region"
         hover_cols = {
             "crime_count": ":,",
             "population": ":,",
-            "area_sq_mi": ":.2f",
-            "population_density": ":,.0f",
-            "crime_density": ":,.1f",
+            "crimes_per_1k": ":.1f",
         }
     else:
-        plot_df = area_density_df.copy()
+        plot_df = area_pop_df.copy()
         plot_df["area_label"] = plot_df["community_area"].map(format_community_area)
         hover_name_col = "area_label"
         hover_cols = {
             "region": True,
             "crime_count": ":,",
             "population": ":,",
-            "area_sq_mi": ":.2f",
-            "population_density": ":,.0f",
-            "crime_density": ":,.1f",
+            "crimes_per_1k": ":.1f",
         }
 
     if len(plot_df) < 2:
-        st.info("Select at least two regions or community areas to evaluate density proportionality.")
+        st.info("Select at least two regions or community areas to compare total crimes vs. population.")
     else:
-        corr = plot_df["population_density"].corr(plot_df["crime_density"])
+        corr = plot_df["population"].corr(plot_df["crime_count"])
         r_squared = corr ** 2 if pd.notna(corr) else float("nan")
         st.caption(
-            f"Pearson correlation: **r = {corr:.2f}** (**R² = {r_squared:.2f}**)"
-            if pd.notna(corr)
-            else "Pearson correlation: N/A"
+            (
+                f"Population vs. total crimes correlation: **r = {corr:.2f}** (**R² = {r_squared:.2f}**) | "
+                if pd.notna(corr)
+                else "Population vs. total crimes correlation: N/A | "
+            )
+            + "Population: U.S. Census / CMAP Community Data Snapshots"
         )
-        fig_density = px.scatter(
+        fig_pop = px.scatter(
             plot_df,
-            x="population_density",
-            y="crime_density",
+            x="population",
+            y="crime_count",
             color="region",
             color_discrete_map=REGION_COLOR_MAP,
             category_orders={"region": ALL_REGIONS},
-            size="population",
             hover_name=hover_name_col,
             hover_data=hover_cols,
             labels={
-                "population_density": "Population Density (people / sq mi)",
-                "crime_density": "Crime Density (crimes / sq mi)",
+                "population": "Population (residents)",
+                "crime_count": "Total Reported Crimes",
+                "crimes_per_1k": "Crimes per 1,000 Residents",
                 "region": "Chicago Region",
             },
         )
-        # Add OLS best-fit line without requiring statsmodels
-        if plot_df["population_density"].nunique() > 1:
+        fig_pop.update_traces(
+            marker=dict(
+                size=13 if pop_granularity == "By Region (9 Chicago Sides)" else 9,
+                opacity=0.9,
+            )
+        )
+        if plot_df["population"].nunique() > 1:
             slope, intercept = np.polyfit(
-                plot_df["population_density"], plot_df["crime_density"], 1
+                plot_df["population"], plot_df["crime_count"], 1
             )
             x_vals = np.linspace(
-                plot_df["population_density"].min(),
-                plot_df["population_density"].max(),
+                plot_df["population"].min(),
+                plot_df["population"].max(),
                 50,
             )
-            fig_density.add_trace(
+            fig_pop.add_trace(
                 go.Scatter(
                     x=x_vals,
                     y=slope * x_vals + intercept,
@@ -808,10 +783,10 @@ with right_col2:
                     line=dict(color="rgba(120, 120, 120, 0.7)", dash="dash"),
                 )
             )
-        fig_density.update_layout(height=385, margin=dict(l=10, r=10, t=10, b=10))
-        st.plotly_chart(fig_density, use_container_width=True)
+        fig_pop.update_layout(height=385, margin=dict(l=10, r=10, t=10, b=10))
+        st.plotly_chart(fig_pop, use_container_width=True)
 
-# --- Row 3: Q4 (Crime Patterns Over Time by Region) ---
+# --- Row 3: Crime Patterns Over Time by Region ---
 st.subheader("How Have Crime Patterns Changed Over Time in Different Regions?")
 trends_df = query_trends_by_region(where_sql, params)
 if trends_df.empty:
@@ -915,15 +890,15 @@ with table_col:
         ].rename(columns={"community_area_name": "community_area"})
         st.dataframe(display_df, use_container_width=True, height=380)
 
-        st.divider()
+st.divider()
 
 # --- Data Sources & Reference Metadata ---
 st.subheader("Data Sources & Reference Metadata")
 st.markdown(
     """
     * **Primary Crime Records (PostgreSQL Star Schema):** [City of Chicago Data Portal — Crimes (2001 to Present)](https://data.cityofchicago.org/Public-Safety/Crimes-2001-to-Present/ijzp-q8t2) (`ijzp-q8t2`), ingested via the ETL pipeline into `fact_crime`, `dim_crime_type`, `dim_location`, and `dim_date`.
-    * **Community Area Names & Land Area (1–77):** [City of Chicago Data Portal — Boundaries: Community Areas](https://data.cityofchicago.org/Facilities-Geographic-Boundaries/Boundaries-Community-Areas/igwz-8jzy) (`igwz-8jzy`) and U.S. Census Bureau TIGER/Line land area measurements (sq. mi.).
-    * **Community Area Population Figures:** U.S. Census Bureau & [Chicago Metropolitan Agency for Planning (CMAP) Community Data Snapshots](https://www.cmap.illinois.gov/data/community-snapshots), joined on official Community Area ID (`1–77`) to compute population density and crime density in **Q3**.
-    * **Chicago Geographic Regions (9 Sides):** City of Chicago / Chicago Department of Public Health (CDPH) standard regional grouping (*Central, Far North Side, Far Southeast Side, Far Southwest Side, North Side, Northwest Side, South Side, Southwest Side, West Side*) used across **Q1–Q4**.
+    * **Community Area Names & Boundaries (1–77):** [City of Chicago Data Portal — Boundaries: Community Areas](https://data.cityofchicago.org/Facilities-Geographic-Boundaries/Boundaries-Community-Areas/igwz-8jzy) (`igwz-8jzy`).
+    * **Community Area Population Figures:** U.S. Census Bureau & [Chicago Metropolitan Agency for Planning (CMAP) Community Data Snapshots](https://www.cmap.illinois.gov/data/community-snapshots), joined on official Community Area ID (`1–77`) to compare total reported crimes against population.
+    * **Chicago Geographic Regions (9 Sides):** City of Chicago / Chicago Department of Public Health (CDPH) standard regional grouping (*Central, Far North Side, Far Southeast Side, Far Southwest Side, North Side, Northwest Side, South Side, Southwest Side, West Side*).
     """
 )
