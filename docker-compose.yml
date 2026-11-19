@@ -21,7 +21,7 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    command: ["python", "load.py"]
+    command: ["python", "run_etl.py"]
     restart: "no"
 
   dashboard:
@@ -32,6 +32,7 @@ services:
         condition: service_healthy
       etl:
         condition: service_completed_successfully
+    command: ["streamlit", "run", "streamlit_app.py", "--server.address=0.0.0.0", "--server.port=8501"]
     ports:
       - "8501:8501"
 

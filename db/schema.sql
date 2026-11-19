@@ -1,7 +1,7 @@
 CREATE TABLE IF NOT EXISTS dim_crime_type (
     crime_type_key SERIAL PRIMARY KEY,
     iucr CHAR(4) NOT NULL UNIQUE,
-    primary_type VARCHAR(30) NOT NULL,
+    primary_type VARCHAR(100) NOT NULL,
     description VARCHAR(100) NOT NULL,
     fbi_code VARCHAR(5) NOT NULL
 );
