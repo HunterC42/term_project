@@ -1,4 +1,5 @@
 .env
+.env.bak
 .git
 __pycache__/
 *.pyc
@@ -6,3 +7,7 @@ venv/
 .venv/
 .pytest_cache/
 .ipynb_checkpoints/
+*.csv
+*.json
+notebooks/
+markdowns/

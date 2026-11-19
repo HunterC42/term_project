@@ -15,31 +15,44 @@ services:
       timeout: 5s
       retries: 10
 
-  etl:
-    build: .
+  extract:
+    build:
+      context: .
+      dockerfile: extract/Dockerfile
     env_file: .env
+    volumes:
+      - crimedata:/data
+    restart: "no"
+
+  loader:
+    build:
+      context: .
+      dockerfile: loader/Dockerfile
+    env_file: .env
+    environment:
+      DATA_DIR: /data
+    volumes:
+      - crimedata:/data
     depends_on:
       db:
         condition: service_healthy
-    command: ["python", "load.py"]
+      extract:
+        condition: service_completed_successfully
     restart: "no"
 
   dashboard:
-    build: .
+    build:
+      context: .
+      dockerfile: app/Dockerfile
     env_file: .env
     depends_on:
       db:
         condition: service_healthy
-      etl:
+      loader:
         condition: service_completed_successfully
     ports:
       - "8501:8501"
 
-  tests:
-    build: .
-    env_file: .env
-    command: ["pytest", "-v", "tests/"]
-    profiles: ["test"]
-
 volumes:
   pgdata:
+  crimedata:
