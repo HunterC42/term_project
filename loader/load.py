@@ -5,19 +5,27 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+SCHEMA_PATH = os.path.join(os.path.dirname(__file__), "..", "db", "schema.sql")
+
 def connect_db():
     conn = psycopg2.connect(
-        host=os.getenv("DB_HOST"),
-        port=os.getenv("DB_PORT"),
-        dbname=os.getenv("DB_NAME"),
-        user=os.getenv("DB_USER"),
-        password=os.getenv("DB_PASSWORD")
+        host=os.getenv("POSTGRES_HOST"),
+        port=os.getenv("POSTGRES_PORT"),
+        dbname=os.getenv("POSTGRES_DB"),
+        user=os.getenv("POSTGRES_USER"),
+        password=os.getenv("POSTGRES_PASSWORD")
     )
     return conn
 
 
+def get_loaded_updates(conn):
+    with conn.cursor() as cursor:
+        cursor.execute("SELECT crime_id, updated_on FROM fact_crime")
+        return dict(cursor.fetchall())
+
+
 def create_tables(conn):
-    with open("schema.sql", "r") as file:
+    with open(SCHEMA_PATH, "r") as file:
         schema = file.read()
 
     with conn.cursor() as cursor:
@@ -45,8 +53,7 @@ def validate_data(df):
     df["updated_on"] = pd.to_datetime(df["updated_on"], errors="raise")
 
     coordinate_columns = [
-        "latitude", "longitude",
-        "x_coordinate", "y_coordinate"
+        "latitude", "longitude"
     ]
 
     for col in coordinate_columns:
@@ -125,8 +132,7 @@ def get_location_key(row):
     columns = [
         "block", "location_description", "beat",
         "district", "ward", "community_area",
-        "latitude", "longitude",
-        "x_coordinate", "y_coordinate"
+        "latitude", "longitude"
     ]
 
     return tuple(
@@ -139,8 +145,7 @@ def load_locations(conn, df):
     location_columns = [
         "block", "location_description", "beat",
         "district", "ward", "community_area",
-        "latitude", "longitude",
-        "x_coordinate", "y_coordinate"
+        "latitude", "longitude"
     ]
 
     locations = df[location_columns].drop_duplicates().copy()
@@ -158,15 +163,13 @@ def load_locations(conn, df):
                 INSERT INTO dim_location (
                     block, location_description, beat,
                     district, ward, community_area,
-                    latitude, longitude,
-                    x_coordinate, y_coordinate
+                    latitude, longitude
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (
                     block, location_description, beat,
                     district, ward, community_area,
-                    latitude, longitude,
-                    x_coordinate, y_coordinate
+                    latitude, longitude
                 )
                 DO UPDATE SET
                     block = EXCLUDED.block
@@ -234,12 +237,29 @@ def load_crimes(conn, df, location_keys):
 
 
 def load_data(df):
-    df = validate_data(df)
-    df = df.astype(object).where(pd.notna(df), None)
     conn = connect_db()
 
     try:
         create_tables(conn)
+
+        loaded_updates = get_loaded_updates(conn)
+        df = df.copy()
+        df["updated_on_dt"] = pd.to_datetime(df["updated_on"])
+        df["stored_updated_on"] = pd.to_datetime(df["id"].map(loaded_updates))
+
+        is_new = df["stored_updated_on"].isna()
+        is_changed = df["updated_on_dt"] > df["stored_updated_on"]
+        df = df[is_new | is_changed].drop(columns=["updated_on_dt", "stored_updated_on"])
+
+        print(f"Already loaded: {len(loaded_updates)} | New/updated rows to load: {len(df)}")
+
+        if df.empty:
+            print("No new or updated rows to load.")
+            return
+
+        df = validate_data(df)
+        df = df.astype(object).where(pd.notna(df), None)
+
         load_crime_types(conn, df)
         load_dates(conn, df)
         location_keys = load_locations(conn, df)

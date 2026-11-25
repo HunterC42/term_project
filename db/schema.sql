@@ -1,7 +1,7 @@
 CREATE TABLE IF NOT EXISTS dim_crime_type (
     crime_type_key SERIAL PRIMARY KEY,
     iucr CHAR(4) NOT NULL UNIQUE,
-    primary_type VARCHAR(30) NOT NULL,
+    primary_type VARCHAR(50) NOT NULL,
     description VARCHAR(100) NOT NULL,
     fbi_code VARCHAR(5) NOT NULL
 );
@@ -15,9 +15,7 @@ CREATE TABLE IF NOT EXISTS dim_location (
     ward SMALLINT,
     community_area SMALLINT,
     latitude DOUBLE PRECISION,
-    longitude DOUBLE PRECISION,
-    x_coordinate DOUBLE PRECISION,
-    y_coordinate DOUBLE PRECISION
+    longitude DOUBLE PRECISION
 );
 
 CREATE TABLE IF NOT EXISTS dim_date (
@@ -51,7 +49,5 @@ ON dim_location (
     ward,
     community_area,
     latitude,
-    longitude,
-    x_coordinate,
-    y_coordinate
+    longitude
 ) NULLS NOT DISTINCT;

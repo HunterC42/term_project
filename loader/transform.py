@@ -43,6 +43,17 @@ def convert_dtypes(df):
     return df
 
 
+def filter_occurred_after(df, start="2026-01-01"):
+    """Scope the loaded dataset to incidents occurring on/after `start`. Extraction is
+    driven by `updated_on`, so older incidents can be re-fetched if their record was
+    recently modified upstream — this keeps those out of the analysis dataset while
+    still letting extraction notice the update."""
+    before = len(df)
+    df = df[df["date"] >= pd.Timestamp(start)]
+    print(f"Rows occurring before {start} removed: {before - len(df)}")
+    return df
+
+
 def add_date_parts(df):
     """Derived columns needed for Q4 (crime patterns over time by region)."""
     df["year"] = df["date"].dt.year
@@ -56,11 +67,13 @@ def add_date_parts(df):
 
 def clean(df):
     """Full transform pipeline, in order: dedupe -> drop sentinel/unusable rows ->
-    drop redundant columns -> fix dtypes -> derive date parts."""
+    drop redundant columns -> fix dtypes -> scope to analysis window -> derive date
+    parts."""
     df = drop_duplicate_ids(df)
     df = drop_unknown_locations(df)
     df = remove_na(df, subset=["latitude", "longitude", "community_area"])
     df = drop_redundant_columns(df)
     df = convert_dtypes(df)
+    df = filter_occurred_after(df)
     df = add_date_parts(df)
     return df
