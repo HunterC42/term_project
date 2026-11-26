@@ -21,13 +21,13 @@ The team selected the Chicago Crimes Dataset that dates back to 2001. This datas
 * **Source**: Options File  
 * **JSON URL**: [https\://data.cityofchicago.org/resource/ijzp-q8t2.json](https://data.cityofchicago.org/resource/ijzp-q8t2.json)   
 * **Dataset URL**: [https\://data.cityofchicago.org/Public-Safety/Crimes-2001-to-Present/ijzp-q8t2/data\_preview](https://data.cityofchicago.org/Public-Safety/Crimes-2001-to-Present/ijzp-q8t2/data_preview)  
-* **API Key**: The API is publicly accessible and does not require an API key for basic requests.  
+* **API Key**: Must use a socrata app token and API key.
 * **Incremental Pulls**: We plan to use the updated\_on column to identify crime records that have been added or modified since the last successful data pull. We will also use the id column to identify each crime record and prevent duplicates when loading the data into PostgreSQL.
 
 
-# **3\. Data Description**
+# **3\. Data Direction and Description**
 
-**Dataset Size:**​​  The Chicago Crimes Dataset contains millions of crime records from 2001\. In our initial API test, we retrieved 1,000 rows and 31 columns. We plan to work with a subset of data for our project to make processing more manageable.  
+**Direction** The team decided to pull from 2026 -> present in order to get the most insights with the least computational load. This will allow the dashboard to visualize crime patterns throughout a full year on January 1st, which is a final underlying question: **How is crime rate affected by season**.
 
 **Questions:**
 
@@ -53,17 +53,7 @@ The team selected the Chicago Crimes Dataset that dates back to 2001. This datas
 
 **fact_crime** This contains the unique facts about each individual crime.
 
-
-# **4\. Plan and Roles**
-
-**Roles:**
-
-Yohan: Extract (API)  
-Ethan: Transform (data cleaning)  
-Hunter: Dashboard   
-Navya: Load (PostgreSQL) and Docker
-
-# **5\. Architecture**
+# **4\. Architecture**
 
 ```mermaid
 flowchart LR
@@ -73,7 +63,7 @@ flowchart LR
 
 ```
 
-# **6\. Setup**
+# **5\. Setup**
 
 Copy `.env.sample` to `.env` and fill in your Socrata API URL/app token (see [data.cityofchicago.org](https://data.cityofchicago.org/profile/app_tokens) to request one) and PostgreSQL credentials:
 
@@ -81,8 +71,9 @@ Copy `.env.sample` to `.env` and fill in your Socrata API URL/app token (see [da
 cp .env.sample .env
 ```
 
-# **7\. Run Pipeline**
+# **6\. Run Pipeline**
 
 ```bash
 docker compose up
 ```
+ctrl + c to stop 
