@@ -45,7 +45,7 @@ The team selected the Chicago Crimes Dataset that dates back to 2001. This datas
 
 **Source Update Frequency:** Daily
 
-**Database Tables:**  
+## **Database Tables:**  
 
 **dim_crime_type:** Stores crime type and fbi code.
 
