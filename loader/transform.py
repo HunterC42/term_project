@@ -54,26 +54,13 @@ def filter_occurred_after(df, start="2026-01-01"):
     return df
 
 
-def add_date_parts(df):
-    """Derived columns needed for Q4 (crime patterns over time by region)."""
-    df["year"] = df["date"].dt.year
-    df["month"] = df["date"].dt.month
-    df["quarter"] = df["date"].dt.quarter
-    df["day"] = df["date"].dt.day
-    df["day_of_week"] = df["date"].dt.dayofweek  # Monday = 0
-    df["hour"] = df["date"].dt.hour
-    return df
-
-
 def clean(df):
     """Full transform pipeline, in order: dedupe -> drop sentinel/unusable rows ->
-    drop redundant columns -> fix dtypes -> scope to analysis window -> derive date
-    parts."""
+    drop redundant columns -> fix dtypes -> scope to analysis window."""
     df = drop_duplicate_ids(df)
     df = drop_unknown_locations(df)
     df = remove_na(df, subset=["latitude", "longitude", "community_area"])
     df = drop_redundant_columns(df)
     df = convert_dtypes(df)
     df = filter_occurred_after(df)
-    df = add_date_parts(df)
     return df

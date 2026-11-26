@@ -97,35 +97,6 @@ def load_crime_types(conn, df):
     conn.commit()
     print("Crime types loaded successfully!")
     
-    
-def load_dates(conn, df):
-
-    dates = pd.to_datetime(df["date"]).dt.normalize().drop_duplicates()
-
-    with conn.cursor() as cursor:
-        for date in dates:
-            cursor.execute("""
-                INSERT INTO dim_date
-                    (date_key, year, quarter, month, day, day_of_week)
-                VALUES (%s, %s, %s, %s, %s, %s)
-                ON CONFLICT (date_key)
-                DO UPDATE SET
-                    year = EXCLUDED.year,
-                    quarter = EXCLUDED.quarter,
-                    month = EXCLUDED.month,
-                    day = EXCLUDED.day,
-                    day_of_week = EXCLUDED.day_of_week
-            """, (
-                date.date(),
-                int(date.year),
-                int(date.quarter),
-                int(date.month),
-                int(date.day),
-                int(date.dayofweek) + 1
-            ))
-
-    conn.commit()
-    print("Dates loaded successfully!")
 
 
 def get_location_key(row):
@@ -206,15 +177,14 @@ def load_crimes(conn, df, location_keys):
             cursor.execute("""
                 INSERT INTO fact_crime (
                     crime_id, case_number, occurred_at,
-                    updated_on, date_key, location_key,
+                    updated_on, location_key,
                     crime_type_key, arrest, domestic
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (crime_id) DO UPDATE SET
                     case_number = EXCLUDED.case_number,
                     occurred_at = EXCLUDED.occurred_at,
                     updated_on = EXCLUDED.updated_on,
-                    date_key = EXCLUDED.date_key,
                     location_key = EXCLUDED.location_key,
                     crime_type_key = EXCLUDED.crime_type_key,
                     arrest = EXCLUDED.arrest,
@@ -224,8 +194,6 @@ def load_crimes(conn, df, location_keys):
                 row["case_number"],
                 row["date"],
                 row["updated_on"],
-                pd.Timestamp(row["date"]).date(),
-
                 location_keys[location],
                 crime_type_key,
                 bool(row["arrest"]),
@@ -261,7 +229,6 @@ def load_data(df):
         df = df.astype(object).where(pd.notna(df), None)
 
         load_crime_types(conn, df)
-        load_dates(conn, df)
         location_keys = load_locations(conn, df)
         load_crimes(conn, df, location_keys)
 

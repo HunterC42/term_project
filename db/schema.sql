@@ -18,21 +18,11 @@ CREATE TABLE IF NOT EXISTS dim_location (
     longitude DOUBLE PRECISION
 );
 
-CREATE TABLE IF NOT EXISTS dim_date (
-    date_key DATE PRIMARY KEY,
-    year SMALLINT NOT NULL,
-    quarter SMALLINT NOT NULL,
-    month SMALLINT NOT NULL,
-    day SMALLINT NOT NULL,
-    day_of_week SMALLINT NOT NULL
-);
-
 CREATE TABLE IF NOT EXISTS fact_crime (
     crime_id BIGINT PRIMARY KEY,
     case_number VARCHAR(20) NOT NULL,
     occurred_at TIMESTAMP NOT NULL,
     updated_on TIMESTAMP NOT NULL,
-    date_key DATE REFERENCES dim_date(date_key),
     location_key INTEGER REFERENCES dim_location(location_key),
     crime_type_key INTEGER REFERENCES dim_crime_type(crime_type_key),
     arrest BOOLEAN NOT NULL,

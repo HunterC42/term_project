@@ -191,14 +191,14 @@ def wait_for_tables(max_retries: int = 40, delay_sec: int = 3) -> bool:
         SELECT COUNT(*)
         FROM information_schema.tables
         WHERE table_schema = 'public'
-          AND table_name IN ('fact_crime', 'dim_crime_type', 'dim_location', 'dim_date');
+          AND table_name IN ('fact_crime', 'dim_crime_type', 'dim_location');
         """
     )
     for _ in range(max_retries):
         try:
             with engine.connect() as conn:
                 table_count = conn.execute(check_sql).scalar() or 0
-                if table_count == 4:
+                if table_count == 3:
                     crime_rows = conn.execute(text("SELECT COUNT(*) FROM fact_crime;")).scalar() or 0
                     if crime_rows > 0:
                         return True
@@ -521,7 +521,7 @@ st.caption(
 
 if not wait_for_tables():
     st.error(
-        "Database tables (`fact_crime`, `dim_crime_type`, `dim_location`, `dim_date`) are not populated yet. "
+        "Database tables (`fact_crime`, `dim_crime_type`, `dim_location`) are not populated yet. "
         "Run `docker compose --profile etl run --rm etl` to populate PostgreSQL."
     )
     st.stop()
@@ -924,7 +924,7 @@ with table_col:
 st.subheader("Data Sources & Reference Metadata")
 st.markdown(
     """
-    * **Primary Crime Records (PostgreSQL Star Schema):** [City of Chicago Data Portal — Crimes (2001 to Present)](https://data.cityofchicago.org/Public-Safety/Crimes-2001-to-Present/ijzp-q8t2) (`ijzp-q8t2`), ingested via the ETL pipeline into `fact_crime`, `dim_crime_type`, `dim_location`, and `dim_date`.
+    * **Primary Crime Records (PostgreSQL Star Schema):** [City of Chicago Data Portal — Crimes (2001 to Present)](https://data.cityofchicago.org/Public-Safety/Crimes-2001-to-Present/ijzp-q8t2) (`ijzp-q8t2`), ingested via the ETL pipeline into `fact_crime`, `dim_crime_type`, and `dim_location`.
     * **Community Area Names & Land Area (1–77):** [City of Chicago Data Portal — Boundaries: Community Areas](https://data.cityofchicago.org/Facilities-Geographic-Boundaries/Boundaries-Community-Areas/igwz-8jzy) (`igwz-8jzy`) and U.S. Census Bureau TIGER/Line land area measurements (sq. mi.).
     * **Community Area Population Figures:** U.S. Census Bureau & [Chicago Metropolitan Agency for Planning (CMAP) Community Data Snapshots](https://www.cmap.illinois.gov/data/community-snapshots), joined on official Community Area ID (`1–77`) to compute population density and crime density in **Q3**.
     * **Chicago Geographic Regions (9 Sides):** City of Chicago / Chicago Department of Public Health (CDPH) standard regional grouping (*Central, Far North Side, Far Southeast Side, Far Southwest Side, North Side, Northwest Side, South Side, Southwest Side, West Side*) used across **Q1–Q4**.
